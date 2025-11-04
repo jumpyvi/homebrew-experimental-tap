@@ -7,6 +7,12 @@ cask "bluefin-cli" do
   desc "Complete shell experience: bling, MOTD, and premium CLI tools"
   homepage "https://github.com/ublue-os/packages"
 
+  livecheck do
+    url "https://github.com/ublue-os/packages/releases/latest"
+    regex(/homebrew[._-](\d{4}[._-]\d{2}[._-]\d{2}[._-]\d{2}[._-]\d{2}[._-]\d{2})/i)
+    strategy :github_latest
+  end
+
   depends_on formula: "glow"
   depends_on formula: "jq"
   depends_on formula: "starship"
@@ -15,12 +21,6 @@ cask "bluefin-cli" do
   depends_on formula: "bat"
   depends_on formula: "eza"
   depends_on formula: "atuin"
-
-  livecheck do
-    url "https://github.com/ublue-os/packages/releases/latest"
-    regex(/homebrew[._-](\d{4}[._-]\d{2}[._-]\d{2}[._-]\d{2}[._-]\d{2}[._-]\d{2})/i)
-    strategy :github_latest
-  end
 
   binary "bluefin-cli"
   artifact "bluefin-logos", target: "#{Dir.home}/.local/share/bluefin-cli/bluefin-logos"
@@ -253,298 +253,298 @@ cask "bluefin-cli" do
     # Install bluefin-cli command for toggling bling and MOTD
     install_path = "#{Dir.home}/.local/share/bluefin-cli"
     cli_command = <<~EOS
-    #!/bin/sh
-    # Bluefin CLI - Bling and MOTD manager
+      #!/bin/sh
+      # Bluefin CLI - Bling and MOTD manager
 
-    remove_block() {
-      file="$1"
-      marker="$2"
-      lines="${3:-1}"
-      awk -v m="$marker" -v n="$lines" '
-        skip>0 { skip--; next }
-        $0 ~ m { skip=n; next }
-        { print }
-      ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
-    }
-
-    # Return the last path component or last whitespace-separated word of a shell path/name
-    get_shell_name() {
-      s="${1:-$SHELL}"
-      s="${s##*/}"    # strip path
-      s="${s##* }"    # if contains spaces, take last word
-      printf '%s' "$s"
-    }
-
-    BLING_MARKER="# bluefin-cli bling"
-    MOTD_MARKER="# bluefin-cli motd"
-    BLING_SH="#{install_path}/bling/bling.sh"
-    BLING_FISH="#{install_path}/bling/bling.fish"
-    MOTD_SH="#{install_path}/motd/bluefin-motd"
-
-    show_help() {
-      cat << 'EOF'
-    bluefin-cli - Bluefin shell experience manager
-
-    Usage: bluefin-cli [COMMAND]
-
-    Commands:
-      bling SHELL [on|off]     Toggle bling for bash, zsh, or fish (default: on)
-      motd [SHELL|all] [on|off]  Toggle MOTD for bash, zsh, fish, or all (default: all on)
-      install NAME|PATH         Install a Brew bundle by name (ai, cli, fonts, k8s) or local path
-      status                   Show current configuration status
-      help                     Show this help message
-
-    Examples:
-      bluefin-cli bling bash on     # Enable bling for bash
-      bluefin-cli bling zsh off     # Disable bling for zsh
-      bluefin-cli motd zsh on       # Enable MOTD for zsh
-      bluefin-cli motd all off      # Disable MOTD for all shells
-      bluefin-cli install ai        # Install the Bluefin AI Brew bundle
-      bluefin-cli install ./Brewfile  # Install from a local Brewfile path
-      bluefin-cli status            # Check all settings
-    EOF
-    }
-
-    toggle_bling() {
-      shell=$1
-      action=${2:-on}
-
-      case "$shell" in
-        bash)
-        config="$HOME/.bashrc"
-        source_line=". $BLING_SH"
-        ;;
-        zsh)
-        config="$HOME/.zshrc"
-        source_line=". $BLING_SH"
-        ;;
-        fish)
-        config="$HOME/.config/fish/config.fish"
-        source_line="source $BLING_FISH"
-        ;;
-        on)
-        bluefin-cli bling "$(get_shell_name)" on
-        ;;
-        off)
-        bluefin-cli bling "$(get_shell_name)" off
-        ;;
-        *)
-        echo "Unknown shell: $shell"
-        return 1
-        ;;
-      esac
-
-      if [ ! -f "$config" ]; then
-        echo "Config file not found: $config"
-        return 1
-      fi
-
-      if [ "$action" = "on" ]; then
-        if grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
-        echo "Bling already enabled for $shell"
-        return 0
-        fi
-        echo "" >> "$config"
-        echo "$BLING_MARKER" >> "$config"
-        echo "$source_line" >> "$config"
-        echo "✓ Bling enabled for $shell"
-      elif [ "$action" = "off" ]; then
-        if ! grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
-        echo "Bling already disabled for $shell"
-        return 0
-        fi
-        remove_block "$config" "$BLING_MARKER" 1
-        echo "✓ Bling disabled for $shell"
-      else
-        echo "Unknown action: $action (use 'on' or 'off')"
-        return 1
-      fi
-    }
-
-    toggle_motd() {
-      shell_or_action=${1:-all}
-      action=${2:-on}
-
-      # If first arg is on/off, treat as action and target all shells
-      case "$shell_or_action" in
-        on|off)
-        action="$shell_or_action"
-        shell_or_action="all"
-        ;;
-      esac
-
-      enable_for_shell() {
-        s="$1"; a="$2"
-        case "$s" in
-        bash)
-          config="$HOME/.bashrc"
-          line="[ -x #{install_path}/motd/bluefin-motd ] && #{install_path}/motd/bluefin-motd"
-          lines_to_remove=1
-          ;;
-        zsh)
-          config="$HOME/.zshrc"
-          line="[ -x #{install_path}/motd/bluefin-motd ] && #{install_path}/motd/bluefin-motd"
-          lines_to_remove=1
-          ;;
-        fish)
-          config="$HOME/.config/fish/config.fish"
-          line="if status is-interactive; and test -x #{install_path}/motd/bluefin-motd; #{install_path}/motd/bluefin-motd; end"
-          lines_to_remove=2
-          ;;
-        *)
-          echo "Unknown shell: $s" >&2; return 1 ;;
-        esac
-
-        [ -f "$config" ] || mkdir -p "$(dirname "$config")" && touch "$config"
-
-        if [ "$a" = "on" ]; then
-        if grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
-          echo "MOTD already enabled for $s"
-        else
-          {
-            echo ""
-            echo "$MOTD_MARKER"
-            echo "$line"
-          } >> "$config"
-          echo "✓ MOTD enabled for $s"
-        fi
-        elif [ "$a" = "off" ]; then
-        if ! grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
-          echo "MOTD already disabled for $s"
-        else
-          remove_block "$config" "$MOTD_MARKER" "$lines_to_remove"
-          echo "✓ MOTD disabled for $s"
-        fi
-        else
-        echo "Unknown action: $a (use 'on' or 'off')"
-        return 1
-        fi
+      remove_block() {
+        file="$1"
+        marker="$2"
+        lines="${3:-1}"
+        awk -v m="$marker" -v n="$lines" '
+          skip>0 { skip--; next }
+          $0 ~ m { skip=n; next }
+          { print }
+        ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
       }
 
-      shells="bash zsh fish"
-      if [ "$shell_or_action" != "all" ]; then
-        shells="$shell_or_action"
-      fi
-      for s in $shells; do
-        enable_for_shell "$s" "$action"
-      done
-    }
+      # Return the last path component or last whitespace-separated word of a shell path/name
+      get_shell_name() {
+        s="${1:-$SHELL}"
+        s="${s##*/}"    # strip path
+        s="${s##* }"    # if contains spaces, take last word
+        printf '%s' "$s"
+      }
 
-    install_bundle() {
-      name_or_path="$1"
-      if [ -z "$name_or_path" ]; then
-        echo "Usage: bluefin-cli install <ai|cli|fonts|k8s|PATH>"
-        return 1
-      fi
+      BLING_MARKER="# bluefin-cli bling"
+      MOTD_MARKER="# bluefin-cli motd"
+      BLING_SH="#{install_path}/bling/bling.sh"
+      BLING_FISH="#{install_path}/bling/bling.fish"
+      MOTD_SH="#{install_path}/motd/bluefin-motd"
 
-      if ! command -v brew >/dev/null 2>&1; then
-        echo "Homebrew not found on PATH. Please install Homebrew first: https://brew.sh"
-        return 1
-      fi
+      show_help() {
+        cat << 'EOF'
+      bluefin-cli - Bluefin shell experience manager
 
-      # If contains a slash, treat as a filesystem path
-      if printf '%s' "$name_or_path" | grep -q "/"; then
-        brewfile="$name_or_path"
-        if [ ! -f "$brewfile" ]; then
-        echo "Brewfile path not found: $brewfile"
-        return 1
-        fi
-      else
-        # Map known bundle names to Bluefin Brewfiles on GitHub
-        base_url="${BLUEFIN_BREW_BASE:-https://raw.githubusercontent.com/ublue-os/bluefin/refs/heads/main/brew}"
-        case "$name_or_path" in
-        ai)    file="bluefin-ai.Brewfile" ;;
-        cli)   file="bluefin-cli.Brewfile" ;;
-        fonts) file="bluefin-fonts.Brewfile" ;;
-        k8s)   file="bluefin-k8s.Brewfile" ;;
-        list)
-          echo "ai:"
-          echo "   AI tools: Goose, Codex, Gemini, Ramalama, etc."
-          echo "cli:"
-          echo "    CLI fun: GitHub CLI, chezmoi, etc."
-          echo "fonts:"
-          echo "    Fonts: Fira Code, JetBrains Mono, etc."
-          echo "k8s:"
-          echo "    Kubernetes tools: kubectl, k9s, kind, etc."
-          return 0
+      Usage: bluefin-cli [COMMAND]
+
+      Commands:
+        bling SHELL [on|off]     Toggle bling for bash, zsh, or fish (default: on)
+        motd [SHELL|all] [on|off]  Toggle MOTD for bash, zsh, fish, or all (default: all on)
+        install NAME|PATH         Install a Brew bundle by name (ai, cli, fonts, k8s) or local path
+        status                   Show current configuration status
+        help                     Show this help message
+
+      Examples:
+        bluefin-cli bling bash on     # Enable bling for bash
+        bluefin-cli bling zsh off     # Disable bling for zsh
+        bluefin-cli motd zsh on       # Enable MOTD for zsh
+        bluefin-cli motd all off      # Disable MOTD for all shells
+        bluefin-cli install ai        # Install the Bluefin AI Brew bundle
+        bluefin-cli install ./Brewfile  # Install from a local Brewfile path
+        bluefin-cli status            # Check all settings
+      EOF
+      }
+
+      toggle_bling() {
+        shell=$1
+        action=${2:-on}
+
+        case "$shell" in
+          bash)
+          config="$HOME/.bashrc"
+          source_line=". $BLING_SH"
           ;;
-        all)
-          bluefin-cli install ai
-          bluefin-cli install cli
-          bluefin-cli install fonts
-          bluefin-cli install k8s
-          return 0
+          zsh)
+          config="$HOME/.zshrc"
+          source_line=". $BLING_SH"
           ;;
-        *)
-          echo "Unknown bundle: $name_or_path"
-          echo "Use one of: ai, cli, fonts, k8s, or provide a path"
+          fish)
+          config="$HOME/.config/fish/config.fish"
+          source_line="source $BLING_FISH"
+          ;;
+          on)
+          bluefin-cli bling "$(get_shell_name)" on
+          ;;
+          off)
+          bluefin-cli bling "$(get_shell_name)" off
+          ;;
+          *)
+          echo "Unknown shell: $shell"
           return 1
           ;;
         esac
-        url="$base_url/$file"
-        brewfile="${TMPDIR:-/tmp}/$file"
-        if ! curl -fsSL "$url" -o "$brewfile"; then
-        echo "Failed to download: $url"
-        return 1
+
+        if [ ! -f "$config" ]; then
+          echo "Config file not found: $config"
+          return 1
         fi
-      fi
 
-      echo "Installing bundle from: $brewfile"
-      BREW_NONINTERACTIVE=1 brew bundle --file="$brewfile"
-    }
-
-    show_status() {
-      echo "Bluefin CLI Status:"
-      echo ""
-      for shell in bash zsh fish; do
-        case "$shell" in
-        bash) config="$HOME/.bashrc" ;;
-        zsh) config="$HOME/.zshrc" ;;
-        fish) config="$HOME/.config/fish/config.fish" ;;
-        esac
-        if [ -f "$config" ] && grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
-        echo "  ✓ Bling: $shell (enabled)"
+        if [ "$action" = "on" ]; then
+          if grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
+          echo "Bling already enabled for $shell"
+          return 0
+          fi
+          echo "" >> "$config"
+          echo "$BLING_MARKER" >> "$config"
+          echo "$source_line" >> "$config"
+          echo "✓ Bling enabled for $shell"
+        elif [ "$action" = "off" ]; then
+          if ! grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
+          echo "Bling already disabled for $shell"
+          return 0
+          fi
+          remove_block "$config" "$BLING_MARKER" 1
+          echo "✓ Bling disabled for $shell"
         else
-        echo "  ✗ Bling: $shell (disabled)"
+          echo "Unknown action: $action (use 'on' or 'off')"
+          return 1
         fi
-      done
-      echo ""
-      for shell in bash zsh fish; do
-        case "$shell" in
-        bash) config="$HOME/.bashrc" ;;
-        zsh) config="$HOME/.zshrc" ;;
-        fish) config="$HOME/.config/fish/config.fish" ;;
-        esac
-        if [ -f "$config" ] && grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
-        echo "  ✓ MOTD: $shell (enabled)"
-        else
-        echo "  ✗ MOTD: $shell (disabled)"
-        fi
-      done
-    }
+      }
 
-    case "${1:-help}" in
-      bling)
-        toggle_bling "$2" "${3:-on}"
-        ;;
-      motd)
-        toggle_motd "${2:-all}" "${3:-on}"
-        ;;
-      install)
-        install_bundle "$2"
-        ;;
-      status)
-        show_status
-        ;;
-      help|--help|-h)
-        show_help
-        ;;
-      *)
-        echo "Unknown command: $1"
-        show_help
-        exit 1
-        ;;
-    esac
+      toggle_motd() {
+        shell_or_action=${1:-all}
+        action=${2:-on}
+
+        # If first arg is on/off, treat as action and target all shells
+        case "$shell_or_action" in
+          on|off)
+          action="$shell_or_action"
+          shell_or_action="all"
+          ;;
+        esac
+
+        enable_for_shell() {
+          s="$1"; a="$2"
+          case "$s" in
+          bash)
+            config="$HOME/.bashrc"
+            line="[ -x #{install_path}/motd/bluefin-motd ] && #{install_path}/motd/bluefin-motd"
+            lines_to_remove=1
+            ;;
+          zsh)
+            config="$HOME/.zshrc"
+            line="[ -x #{install_path}/motd/bluefin-motd ] && #{install_path}/motd/bluefin-motd"
+            lines_to_remove=1
+            ;;
+          fish)
+            config="$HOME/.config/fish/config.fish"
+            line="if status is-interactive; and test -x #{install_path}/motd/bluefin-motd; #{install_path}/motd/bluefin-motd; end"
+            lines_to_remove=2
+            ;;
+          *)
+            echo "Unknown shell: $s" >&2; return 1 ;;
+          esac
+
+          [ -f "$config" ] || mkdir -p "$(dirname "$config")" && touch "$config"
+
+          if [ "$a" = "on" ]; then
+          if grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
+            echo "MOTD already enabled for $s"
+          else
+            {
+              echo ""
+              echo "$MOTD_MARKER"
+              echo "$line"
+            } >> "$config"
+            echo "✓ MOTD enabled for $s"
+          fi
+          elif [ "$a" = "off" ]; then
+          if ! grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
+            echo "MOTD already disabled for $s"
+          else
+            remove_block "$config" "$MOTD_MARKER" "$lines_to_remove"
+            echo "✓ MOTD disabled for $s"
+          fi
+          else
+          echo "Unknown action: $a (use 'on' or 'off')"
+          return 1
+          fi
+        }
+
+        shells="bash zsh fish"
+        if [ "$shell_or_action" != "all" ]; then
+          shells="$shell_or_action"
+        fi
+        for s in $shells; do
+          enable_for_shell "$s" "$action"
+        done
+      }
+
+      install_bundle() {
+        name_or_path="$1"
+        if [ -z "$name_or_path" ]; then
+          echo "Usage: bluefin-cli install <ai|cli|fonts|k8s|PATH>"
+          return 1
+        fi
+
+        if ! command -v brew >/dev/null 2>&1; then
+          echo "Homebrew not found on PATH. Please install Homebrew first: https://brew.sh"
+          return 1
+        fi
+
+        # If contains a slash, treat as a filesystem path
+        if printf '%s' "$name_or_path" | grep -q "/"; then
+          brewfile="$name_or_path"
+          if [ ! -f "$brewfile" ]; then
+          echo "Brewfile path not found: $brewfile"
+          return 1
+          fi
+        else
+          # Map known bundle names to Bluefin Brewfiles on GitHub
+          base_url="${BLUEFIN_BREW_BASE:-https://raw.githubusercontent.com/ublue-os/bluefin/refs/heads/main/brew}"
+          case "$name_or_path" in
+          ai)    file="bluefin-ai.Brewfile" ;;
+          cli)   file="bluefin-cli.Brewfile" ;;
+          fonts) file="bluefin-fonts.Brewfile" ;;
+          k8s)   file="bluefin-k8s.Brewfile" ;;
+          list)
+            echo "ai:"
+            echo "   AI tools: Goose, Codex, Gemini, Ramalama, etc."
+            echo "cli:"
+            echo "    CLI fun: GitHub CLI, chezmoi, etc."
+            echo "fonts:"
+            echo "    Fonts: Fira Code, JetBrains Mono, etc."
+            echo "k8s:"
+            echo "    Kubernetes tools: kubectl, k9s, kind, etc."
+            return 0
+            ;;
+          all)
+            bluefin-cli install ai
+            bluefin-cli install cli
+            bluefin-cli install fonts
+            bluefin-cli install k8s
+            return 0
+            ;;
+          *)
+            echo "Unknown bundle: $name_or_path"
+            echo "Use one of: ai, cli, fonts, k8s, or provide a path"
+            return 1
+            ;;
+          esac
+          url="$base_url/$file"
+          brewfile="${TMPDIR:-/tmp}/$file"
+          if ! curl -fsSL "$url" -o "$brewfile"; then
+          echo "Failed to download: $url"
+          return 1
+          fi
+        fi
+
+        echo "Installing bundle from: $brewfile"
+        BREW_NONINTERACTIVE=1 brew bundle --file="$brewfile"
+      }
+
+      show_status() {
+        echo "Bluefin CLI Status:"
+        echo ""
+        for shell in bash zsh fish; do
+          case "$shell" in
+          bash) config="$HOME/.bashrc" ;;
+          zsh) config="$HOME/.zshrc" ;;
+          fish) config="$HOME/.config/fish/config.fish" ;;
+          esac
+          if [ -f "$config" ] && grep -q "$BLING_MARKER" "$config" 2>/dev/null; then
+          echo "  ✓ Bling: $shell (enabled)"
+          else
+          echo "  ✗ Bling: $shell (disabled)"
+          fi
+        done
+        echo ""
+        for shell in bash zsh fish; do
+          case "$shell" in
+          bash) config="$HOME/.bashrc" ;;
+          zsh) config="$HOME/.zshrc" ;;
+          fish) config="$HOME/.config/fish/config.fish" ;;
+          esac
+          if [ -f "$config" ] && grep -q "$MOTD_MARKER" "$config" 2>/dev/null; then
+          echo "  ✓ MOTD: $shell (enabled)"
+          else
+          echo "  ✗ MOTD: $shell (disabled)"
+          fi
+        done
+      }
+
+      case "${1:-help}" in
+        bling)
+          toggle_bling "$2" "${3:-on}"
+          ;;
+        motd)
+          toggle_motd "${2:-all}" "${3:-on}"
+          ;;
+        install)
+          install_bundle "$2"
+          ;;
+        status)
+          show_status
+          ;;
+        help|--help|-h)
+          show_help
+          ;;
+        *)
+          echo "Unknown command: $1"
+          show_help
+          exit 1
+          ;;
+      esac
     EOS
 
     File.write("#{staged_path}/bluefin-cli", cli_command)
