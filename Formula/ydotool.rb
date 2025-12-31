@@ -12,8 +12,7 @@ class Ydotool < Formula
   end
 
   bottle do
-    root_url "https://github.com/ublue-os/homebrew-tap/releases/download/ydotool-1.0.4"
-    sha256 cellar: :any_skip_relocation, x86_64_linux: "66a00b7830a0c9703c7ae073fa3f45f2f2409a84aeeae463c77262ecd330e7fa"
+    sha256 x86_64_linux: "66a00b7830a0c9703c7ae073fa3f45f2f2409a84aeeae463c77262ecd330e7fa"
   end
 
   depends_on "cmake" => :build
