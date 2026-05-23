@@ -1,9 +1,9 @@
 cask "opencode-desktop-linux" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "1.15.3"
-  sha256 on_arch_conditional intel: "e8a19e18952036413223ef20121c75a1d25ea838f0bb8e1a95f403eef2d3f11f",
-                             arm:   "82a8c7b8069a988f4b73f28991a6cb445930924223998061abdf9f0c0fe9fb77"
+  version "1.15.10"
+  sha256 on_arch_conditional intel: "62ca5b908bf02a67ef1739bd4df63eb3da81c88d70f72923bb6218b12ab7ac05",
+                             arm:   "555aca15c802c2eafaa64e439e9708aca1d382a896742a78fd39087bc8f1adbe"
 
   url "https://github.com/anomalyco/opencode/releases/download/v#{version}/opencode-desktop-linux-#{arch}.rpm",
       verified: "github.com/anomalyco/opencode/"
