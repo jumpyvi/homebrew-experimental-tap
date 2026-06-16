@@ -1,6 +1,6 @@
 cask "emdash-linux" do
-  version "1.1.16"
-  sha256 "2a19c0cad4ed57bab064ef0fe7f0036ecd17ef2f9bbc034464db757280ce6d92"
+  version "1.1.34"
+  sha256 "e6deb299ac2b01d9bb9321c554f8c27ac477f968b436b68a94a856207f263338"
 
   url "https://github.com/generalaction/emdash/releases/download/v#{version}/emdash-x86_64.AppImage"
   name "Emdash"
