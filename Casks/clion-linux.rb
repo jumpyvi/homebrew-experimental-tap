@@ -1,11 +1,10 @@
 cask "clion-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.148"
-  sha256 on_arch_conditional intel: "4372ce869c2953abeb3d613303eb366676d1c68f847a8741507518b375e292bb",
-                             arm:   "60cd74e68ccfefca0b0e6c0a2f4b78678c068c20e1eb1be17ff0b5a020fa422f"
+  version "2026.2.3.1,262.10968.176"
+  sha256 arm64_linux:  "d511854dd3879ea6206cfb12ac1a46d0a5db03c6c11a726eb8ea52a6d94f3f23",
+         x86_64_linux: "8db6133c8ac63b8e492e5401f0f32026a9cdf698787f8578d20339c05e73c7c3"
 
   url "https://download.jetbrains.com/cpp/CLion-#{version.csv.first}#{arch}.tar.gz"
   name "CLion"
@@ -27,23 +26,28 @@ cask "clion-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/clion-linux/#{version}/clion-#{version.csv.first}/bin/clion"
+  binary "clion/bin/clion"
   artifact "jetbrains-clion.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-clion.desktop"
-  artifact "clion-#{version.csv.first}/bin/clion.svg",
+  artifact "clion/bin/clion.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/clion.svg"
 
-  preflight do
-    File.write("#{staged_path}/clion-#{version.csv.first}/bin/clion64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-clion.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "clion", recursive: true
+    move "clion-*", "clion", source_glob: true
+    touch "clion/bin/clion64.vmoptions"
+    inreplace "clion/bin/clion64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-clion.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=CLion
       Comment=A cross-platform C and C++ IDE
-      Exec=#{HOMEBREW_PREFIX}/bin/clion %u
+      Exec={{HOMEBREW_PREFIX}}/bin/clion %u
       Icon=clion
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "clion-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

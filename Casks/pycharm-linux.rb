@@ -1,11 +1,10 @@
 cask "pycharm-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.152"
-  sha256 on_arch_conditional intel: "91c775be16fb0859f9b18ebd456d88e131cadf337b0ce9f9d8ed187886561966",
-                             arm:   "e6b4f25267afade04be6764f6bb16ea1d16159cae3490fbb4f58cc168ecffee3"
+  version "2026.2.3,262.10968.92"
+  sha256 arm64_linux:  "c1ac6b7440f4d8946241d602220e9db9afac75f41831ca21dc5168cdf3689d0e",
+         x86_64_linux: "e8e4fbe4dab44390d09f681e059a316e692cabd24b2e11ce98ff76c8120fa313"
 
   url "https://download.jetbrains.com/python/pycharm-#{version.csv.first}#{arch}.tar.gz"
   name "PyCharm"
@@ -27,23 +26,28 @@ cask "pycharm-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/pycharm-linux/#{version}/pycharm-#{version.csv.first}/bin/pycharm"
+  binary "pycharm/bin/pycharm"
   artifact "jetbrains-pycharm.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-pycharm.desktop"
-  artifact "pycharm-#{version.csv.first}/bin/pycharm.svg",
+  artifact "pycharm/bin/pycharm.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/pycharm.svg"
 
-  preflight do
-    File.write("#{staged_path}/pycharm-#{version.csv.first}/bin/pycharm64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-pycharm.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "pycharm", recursive: true
+    move "pycharm-*", "pycharm", source_glob: true
+    touch "pycharm/bin/pycharm64.vmoptions"
+    inreplace "pycharm/bin/pycharm64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-pycharm.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=PyCharm
       Comment=The Only Python IDE you need
-      Exec=#{HOMEBREW_PREFIX}/bin/pycharm %u
+      Exec={{HOMEBREW_PREFIX}}/bin/pycharm %u
       Icon=pycharm
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "pycharm-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

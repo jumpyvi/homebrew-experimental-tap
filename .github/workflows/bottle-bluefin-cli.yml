@@ -23,33 +23,42 @@ jobs:
       pr-number: ${{ steps.create-pr.outputs.pull-request-number }}
       working-branch: ${{ steps.set-working-branch.outputs.working-branch }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Check version and determine if update needed
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # read the upstream repo from the formula so org transfers don't break this
+          UPSTREAM_REPO=$(grep -oP '^  url "https://github.com/\K[^/]+/[^/]+(?=/archive/)' Formula/bluefin-cli.rb)
+          if [ -z "$UPSTREAM_REPO" ]; then
+            echo "Could not determine upstream repo from Formula/bluefin-cli.rb" >&2
+            exit 1
+          fi
+          echo "Upstream repo: ${UPSTREAM_REPO}"
+          echo "upstream_repo=${UPSTREAM_REPO}" >> "$GITHUB_OUTPUT"
+
           if [ -n "${{ github.event.client_payload.version || github.event.inputs.version }}" ]; then
             TARGET_INPUT="${{ github.event.client_payload.version || github.event.inputs.version }}"
             TARGET_TAG="${TARGET_INPUT#v}"
             echo "Checking manual version request: ${TARGET_TAG}"
           else
             echo "Checking for latest GitHub release..."
-            TARGET_TAG=$(gh release view --repo hanthor/bluefin-cli --json tagName --jq .tagName)
+            TARGET_TAG=$(gh release view --repo "$UPSTREAM_REPO" --json tagName --jq .tagName)
             TARGET_TAG="${TARGET_TAG#v}"
           fi
 
           echo "latest_version=${TARGET_TAG}" >> "$GITHUB_OUTPUT"
 
-          CURRENT_VERSION=$(grep -oP '^  url "https://github.com/hanthor/bluefin-cli/archive/refs/tags/v\K[^\"]+(?=\.tar\.gz")' Formula/bluefin-cli.rb)
+          CURRENT_VERSION=$(grep -oP '^  url "https://github.com/[^/]+/[^/]+/archive/refs/tags/v\K[^\"]+(?=\.tar\.gz")' Formula/bluefin-cli.rb)
           echo "current_version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
 
           if [ "$TARGET_TAG" != "$CURRENT_VERSION" ]; then
             echo "needs_update=true" >> "$GITHUB_OUTPUT"
             echo "Update needed: $CURRENT_VERSION -> $TARGET_TAG"
 
-            SOURCE_URL="https://github.com/hanthor/bluefin-cli/archive/refs/tags/v${TARGET_TAG}.tar.gz"
+            SOURCE_URL="https://github.com/${UPSTREAM_REPO}/archive/refs/tags/v${TARGET_TAG}.tar.gz"
             SOURCE_SHA=$(curl -fsSL "$SOURCE_URL" | sha256sum | awk '{print $1}')
             echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           else
@@ -68,8 +77,9 @@ jobs:
         run: |
           VERSION="${{ steps.check.outputs.latest_version }}"
           SOURCE_SHA="${{ steps.check.outputs.source_sha }}"
+          UPSTREAM_REPO="${{ steps.check.outputs.upstream_repo }}"
 
-          sed -i "s|^  url \".*\"|  url \"https://github.com/hanthor/bluefin-cli/archive/refs/tags/v${VERSION}.tar.gz\"|" Formula/bluefin-cli.rb
+          sed -i "s|^  url \".*\"|  url \"https://github.com/${UPSTREAM_REPO}/archive/refs/tags/v${VERSION}.tar.gz\"|" Formula/bluefin-cli.rb
           sed -i "s|^  sha256 \".*\"|  sha256 \"${SOURCE_SHA}\"|" Formula/bluefin-cli.rb
 
       - name: Create PR for formula update
@@ -103,12 +113,12 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.update-formula.outputs.working-branch }}
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@6eaeff80e7e5c43087c0e5eb5aa82120399e9c91 # master
+        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -142,7 +152,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.update-formula.outputs.working-branch }}
 
@@ -168,7 +178,7 @@ jobs:
           fi
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@6eaeff80e7e5c43087c0e5eb5aa82120399e9c91 # master
+        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -195,12 +205,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.update-formula.outputs.working-branch }}
 
       - name: Set up Homebrew
-        uses: Homebrew/actions/setup-homebrew@6eaeff80e7e5c43087c0e5eb5aa82120399e9c91 # master
+        uses: Homebrew/actions/setup-homebrew@1e34f2e2acaa766b7efacb8c26352e6abbb023f9 # 2026.09.13.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

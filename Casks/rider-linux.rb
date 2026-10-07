@@ -1,11 +1,10 @@
 cask "rider-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.190"
-  sha256 on_arch_conditional intel: "3a6cac6865c6331c4001adaaac7bd7f325c8c092d4eed286f3f1011a1af9e440",
-                             arm:   "c5cc1de0e8286cc5c54365be48de8ee48de6b9de2479d550ff4ad90566d72066"
+  version "2026.2.3.1,262.10968.170"
+  sha256 arm64_linux:  "8239c1e7c0352a9fb79dcbf68fb9550d64b215606a635ed88981291d92995a61",
+         x86_64_linux: "fa4b09a5f7cf4b6635b093adc7313991778a8dc74f25614a2b8976b04dee5d4e"
 
   url "https://download.jetbrains.com/rider/JetBrains.Rider-#{version.csv.first}#{arch}.tar.gz"
   name "Rider"
@@ -27,23 +26,28 @@ cask "rider-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/rider-linux/#{version}/JetBrains Rider-#{version.csv.first}/bin/rider"
+  binary "rider/bin/rider"
   artifact "jetbrains-rider.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-rider.desktop"
-  artifact "JetBrains Rider-#{version.csv.first}/bin/rider.svg",
+  artifact "rider/bin/rider.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/rider.svg"
 
-  preflight do
-    File.write("#{staged_path}/JetBrains Rider-#{version.csv.first}/bin/rider64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-rider.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "rider", recursive: true
+    move "JetBrains Rider-*", "rider", source_glob: true
+    touch "rider/bin/rider64.vmoptions"
+    inreplace "rider/bin/rider64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-rider.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=Rider
       Comment=All-in-one IDE for .NET and game development
-      Exec=#{HOMEBREW_PREFIX}/bin/rider %u
+      Exec={{HOMEBREW_PREFIX}}/bin/rider %u
       Icon=rider
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "rider-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

@@ -1,11 +1,10 @@
 cask "rustrover-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.182"
-  sha256 on_arch_conditional intel: "20d233ee719aaffa0787e0877f3e239b9b7dfc044f70c7e99ce97df59de48372",
-                             arm:   "3e608360cf27ab24909ba72950943d3f2cd290a391e95dcbb979d8a44d22edf5"
+  version "2026.2.3,262.10968.75"
+  sha256 arm64_linux:  "922f8b280f15068eabbcd731e7f2059980d827530f7ef0b44efc0a5911bf6238",
+         x86_64_linux: "fac0d50307301ecdb69998feeb338f1287a96e9c02d205165ec4e1d8c0ed40a6"
 
   url "https://download.jetbrains.com/rustrover/RustRover-#{version.csv.first}#{arch}.tar.gz"
   name "RustRover"
@@ -27,23 +26,28 @@ cask "rustrover-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/rustrover-linux/#{version}/RustRover-#{version.csv.first}/bin/rustrover"
+  binary "rustrover/bin/rustrover"
   artifact "jetbrains-rustrover.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-rustrover.desktop"
-  artifact "RustRover-#{version.csv.first}/bin/rustrover.svg",
+  artifact "rustrover/bin/rustrover.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/rustrover.svg"
 
-  preflight do
-    File.write("#{staged_path}/RustRover-#{version.csv.first}/bin/rustrover64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-rustrover.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "rustrover", recursive: true
+    move "RustRover-*", "rustrover", source_glob: true
+    touch "rustrover/bin/rustrover64.vmoptions"
+    inreplace "rustrover/bin/rustrover64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-rustrover.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=RustRover
       Comment=A powerful IDE for Rust
-      Exec=#{HOMEBREW_PREFIX}/bin/rustrover %u
+      Exec={{HOMEBREW_PREFIX}}/bin/rustrover %u
       Icon=rustrover
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "rustrover-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

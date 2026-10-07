@@ -1,11 +1,10 @@
 cask "intellij-idea-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.151"
-  sha256 on_arch_conditional intel: "e820175d1a7d0ee2492e7b38f6b7f046a132bfe4b082086d9b035edb03c777b1",
-                             arm:   "617739722b5b5453aaa5c0853fe1a2fb6e37cf7557529159c4c56aea40e083dd"
+  version "2026.2.3,262.10968.63"
+  sha256 arm64_linux:  "873286dd6406971a2311827edd66c56060c345582a4a6b1774e3925183b02ec5",
+         x86_64_linux: "68751c8ae4d49407251cd197df795fbed91b6fdc85d10c73c4649a99e496ab37"
 
   url "https://download.jetbrains.com/idea/ideaIU-#{version.csv.first}#{arch}.tar.gz"
   name "IntelliJ IDEA Ultimate"
@@ -27,23 +26,28 @@ cask "intellij-idea-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/intellij-idea-linux/#{version}/idea-IU-#{version.csv.second}/bin/idea"
+  binary "idea/bin/idea"
   artifact "jetbrains-idea.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-idea.desktop"
-  artifact "idea-IU-#{version.csv.second}/bin/idea.svg",
+  artifact "idea/bin/idea.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/idea.svg"
 
-  preflight do
-    File.write("#{staged_path}/idea-IU-#{version.csv.second}/bin/idea64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-idea.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "idea", recursive: true
+    move "idea-IU-*", "idea", source_glob: true
+    touch "idea/bin/idea64.vmoptions"
+    inreplace "idea/bin/idea64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-idea.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=Intellij IDEA
       Comment=The IDE for pro Java and Kotlin development
-      Exec=#{HOMEBREW_PREFIX}/bin/idea %u
+      Exec={{HOMEBREW_PREFIX}}/bin/idea %u
       Icon=idea
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "intellij-idea-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

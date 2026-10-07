@@ -1,49 +1,61 @@
 cask "opencode-desktop-linux" do
   arch arm: "aarch64", intel: "x86_64"
 
-  version "1.15.11"
-  sha256 on_arch_conditional intel: "a2805908a6f71a574a4a253301e19395443c8c9318d3a7dcbb67257e7e3f07f0",
-                             arm:   "52913ae639e83d2c6abf5a9ac78dc503189e4c690ea3b84d262744994f53b510"
+  version "2.0.24"
+  sha256 arm64_linux:  "a87d456fc0af5940b4b621755a59a5adc81dfd3d14d73a6854518d35e2944cef",
+         x86_64_linux: "0c64733ea978132155bf89eb9c2bd9f386d83ee275e44ead56f3fb22e24db897"
 
-  url "https://github.com/anomalyco/opencode/releases/download/v#{version}/opencode-desktop-linux-#{arch}.rpm",
-      verified: "github.com/anomalyco/opencode/"
+  # 2.x desktop builds are not on GitHub releases; the anomalyco feed stops at
+  # v1.18.32. Filenames are unchanged, so only the host differs.
+  url "https://opencode.ai/files/bin/#{version}/opencode-desktop-linux-#{arch}.rpm"
   name "OpenCode"
   desc "Open source AI coding agent desktop client"
   homepage "https://opencode.ai/"
 
+  # The updater endpoint the app itself calls, and the only machine-readable
+  # source for 2.x. It returns the newest version whatever version= says, so
+  # take both sha256 values from metadata.files here on a bump.
   livecheck do
-    url "https://github.com/anomalyco/opencode/releases/latest/download/latest.json"
+    url "https://opencode.ai/update/api/latest/desktop/opencode/?arch=x86_64&version=#{version}"
     strategy :json do |json|
       json["version"]
     end
   end
 
-  depends_on formula: "gtk+3"
-  depends_on formula: "webkitgtk"
-  depends_on formula: "rpm2cpio"
   depends_on formula: "cpio"
+  depends_on formula: "gtk+3"
+  depends_on formula: "rpm2cpio"
+  depends_on linux: :any
 
-  binary "usr/bin/OpenCode", target: "opencode-desktop"
-  binary "usr/bin/opencode-cli", target: "opencode-cli"
-  artifact "usr/share/icons/hicolor/32x32/apps/OpenCode.png",
-           target: "#{Dir.home}/.local/share/icons/hicolor/32x32/apps/OpenCode.png"
-  artifact "usr/share/icons/hicolor/128x128/apps/OpenCode.png",
-           target: "#{Dir.home}/.local/share/icons/hicolor/128x128/apps/OpenCode.png"
-  artifact "usr/share/icons/hicolor/256x256@2/apps/OpenCode.png",
-           target: "#{Dir.home}/.local/share/icons/hicolor/256x256@2/apps/OpenCode.png"
-  artifact "usr/share/applications/OpenCode.desktop",
-           target: "#{Dir.home}/.local/share/applications/OpenCode.desktop"
+  binary "opt/OpenCode/ai.opencode.desktop", target: "opencode-desktop"
+  artifact "usr/share/applications/opencode-desktop.desktop",
+           target: "#{Dir.home}/.local/share/applications/opencode-desktop.desktop"
+  artifact "usr/share/applications/ai.opencode.desktop.desktop",
+           target: "#{Dir.home}/.local/share/applications/ai.opencode.desktop.desktop"
+  artifact "usr/share/icons/hicolor/32x32/apps/ai.opencode.desktop.png",
+           target: "#{Dir.home}/.local/share/icons/hicolor/32x32/apps/ai.opencode.desktop.png"
+  artifact "usr/share/icons/hicolor/64x64/apps/ai.opencode.desktop.png",
+           target: "#{Dir.home}/.local/share/icons/hicolor/64x64/apps/ai.opencode.desktop.png"
+  artifact "usr/share/icons/hicolor/128x128/apps/ai.opencode.desktop.png",
+           target: "#{Dir.home}/.local/share/icons/hicolor/128x128/apps/ai.opencode.desktop.png"
 
-  preflight do
-    rpm2cpio = Formula["rpm2cpio"].bin/"rpm2cpio"
-    cpio = Formula["cpio"].bin/"cpio"
-    system "sh", "-c", "'#{rpm2cpio}' '#{staged_path}/opencode-desktop-linux-#{arch}.rpm' | '#{cpio}' -idm --quiet",
-           chdir: staged_path
+  preflight_steps do
+    # Normalise the arch-specific RPM filename, then split extraction.
+    move "opencode-desktop-linux-*.rpm", "opencode-desktop.rpm", source_glob: true
+    run "{{HOMEBREW_PREFIX}}/bin/rpm2cpio", args:        ["{{staged_path}}/opencode-desktop.rpm"],
+                                            stdout_path: "opencode-desktop.cpio"
+    run "{{HOMEBREW_PREFIX}}/bin/cpio", args: ["-idm", "--quiet"], stdin_path: "opencode-desktop.cpio",
+        chdir: "{{staged_path}}"
+    remove ["opencode-desktop.rpm", "opencode-desktop.cpio"]
 
-    desktop_file = "#{staged_path}/usr/share/applications/OpenCode.desktop"
-    content = File.read(desktop_file)
-    content.gsub!(/^Exec=.*/, "Exec=#{HOMEBREW_PREFIX}/bin/opencode-desktop %U")
-    File.write(desktop_file, content)
+    # Rewrite every discovered desktop file, mirroring the original
+    # `Dir["#{staged_path}/usr/share/applications/*.desktop"].each` behaviour.
+    run "sh", args: ["-c", <<~SH]
+      for f in "{{staged_path}}"/usr/share/applications/*.desktop; do
+        [ -f "$f" ] || continue
+        sed -i 's#^Exec=.*#Exec={{HOMEBREW_PREFIX}}/bin/opencode-desktop %U#' "$f"
+      done
+    SH
   end
 
   zap trash: [

@@ -1,11 +1,10 @@
 cask "webstorm-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.125"
-  sha256 on_arch_conditional intel: "c6830e2d84ae5aa59487944b2354383a702018ceada910d677556850b5f5ef21",
-                             arm:   "41ef72725423f7bd632bc57648be460253698147d3c0ffcf4b620bbf62f286e1"
+  version "2026.2.3,262.10968.77"
+  sha256 arm64_linux:  "b21c85335e4e8404a8279750e69ff8bf571d00f12ebbf934b6b239f5bcc6d664",
+         x86_64_linux: "3e29741c06799d6609c6d1ff7df720cad73cdb47825879091a577ed496cd00b0"
 
   url "https://download.jetbrains.com/webstorm/WebStorm-#{version.csv.first}#{arch}.tar.gz"
   name "WebStorm"
@@ -27,23 +26,28 @@ cask "webstorm-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/webstorm-linux/#{version}/WebStorm-#{version.csv.second}/bin/webstorm"
+  binary "webstorm/bin/webstorm"
   artifact "jetbrains-webstorm.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-webstorm.desktop"
-  artifact "WebStorm-#{version.csv.second}/bin/webstorm.svg",
+  artifact "webstorm/bin/webstorm.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/webstorm.svg"
 
-  preflight do
-    File.write("#{staged_path}/WebStorm-#{version.csv.second}/bin/webstorm64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-webstorm.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "webstorm", recursive: true
+    move "WebStorm-*", "webstorm", source_glob: true
+    touch "webstorm/bin/webstorm64.vmoptions"
+    inreplace "webstorm/bin/webstorm64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-webstorm.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=WebStorm
       Comment=A JavaScript and TypeScript IDE
-      Exec=#{HOMEBREW_PREFIX}/bin/webstorm %u
+      Exec={{HOMEBREW_PREFIX}}/bin/webstorm %u
       Icon=webstorm
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "webstorm-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

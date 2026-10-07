@@ -1,11 +1,10 @@
 cask "goland-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.24374.154"
-  sha256 on_arch_conditional intel: "d4590311a6a9c836d33dee2ca0e7720872e4a7f513deb67ab221b21b28e6189a",
-                             arm:   "13c5a9038b3f78f10302ce3b20f0b4bf5d02d552a5f54614ed5357ff98a0a66e"
+  version "2026.2.3,262.10968.67"
+  sha256 arm64_linux:  "6d4ad1342ce1c2a738fd93f6a19f2a71245c04fd295a162a486305fc3f13e2a5",
+         x86_64_linux: "0af3e82e63f906824c49c41fdbf6c6e679a02ab94ab11fc04f27050a6970d76f"
 
   url "https://download.jetbrains.com/go/goland-#{version.csv.first}#{arch}.tar.gz"
   name "GoLand"
@@ -27,23 +26,28 @@ cask "goland-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/goland-linux/#{version}/GoLand-#{version.csv.first}/bin/goland"
+  binary "goland/bin/goland"
   artifact "jetbrains-goland.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-goland.desktop"
-  artifact "GoLand-#{version.csv.first}/bin/goland.svg",
+  artifact "goland/bin/goland.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/goland.svg"
 
-  preflight do
-    File.write("#{staged_path}/GoLand-#{version.csv.first}/bin/goland64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-goland.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "goland", recursive: true
+    move "GoLand-*", "goland", source_glob: true
+    touch "goland/bin/goland64.vmoptions"
+    inreplace "goland/bin/goland64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-goland.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=GoLand
       Comment=An IDE for Go and Web
-      Exec=#{HOMEBREW_PREFIX}/bin/goland %u
+      Exec={{HOMEBREW_PREFIX}}/bin/goland %u
       Icon=goland
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "goland-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [

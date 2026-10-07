@@ -1,11 +1,10 @@
 cask "dataspell-linux" do
-  arch intel: "",
-       arm:   "-aarch64"
+  arch arm: "-aarch64"
   os linux: "linux"
 
-  version "2026.1.2,261.25134.18"
-  sha256 on_arch_conditional intel: "0f978e36b3bee442f572eb24514e1c4582e071b1bb442be5b9c9e6c3db7608e3",
-                             arm:   "4929883c5d290cca25c5e5cbdb551a1cc6d976d61b0a1595c532993ac3e11fe2"
+  version "2026.1.3,261.26222.84"
+  sha256 arm64_linux:  "6dc809598af27e1f6f11fdb18de986114d79f927d944c431122bcb87e3cfa30c",
+         x86_64_linux: "e7b131c9d4677c28980908fad57a3fa2628021b299172923a8348eb847648068"
 
   url "https://download.jetbrains.com/python/dataspell-#{version.csv.first}#{arch}.tar.gz"
   name "DataSpell"
@@ -27,23 +26,28 @@ cask "dataspell-linux" do
 
   auto_updates false
   conflicts_with cask: "jetbrains-toolbox-linux"
+  depends_on linux: :any
 
-  binary "#{HOMEBREW_PREFIX}/Caskroom/dataspell-linux/#{version}/dataspell-#{version.csv.first}/bin/dataspell"
+  binary "dataspell/bin/dataspell"
   artifact "jetbrains-dataspell.desktop",
            target: "#{Dir.home}/.local/share/applications/jetbrains-dataspell.desktop"
-  artifact "dataspell-#{version.csv.first}/bin/dataspell.svg",
+  artifact "dataspell/bin/dataspell.svg",
            target: "#{Dir.home}/.local/share/icons/hicolor/scalable/apps/dataspell.svg"
 
-  preflight do
-    File.write("#{staged_path}/dataspell-#{version.csv.first}/bin/dataspell64.vmoptions", "-Dide.no.platform.update=true\n", mode: "a+")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/applications")
-    FileUtils.mkdir_p("#{Dir.home}/.local/share/icons/hicolor/scalable/apps")
-    File.write("#{staged_path}/jetbrains-dataspell.desktop", <<~EOS)
+  preflight_steps do
+    # Normalise the versioned directory before referring to it in declarative steps.
+    remove "dataspell", recursive: true
+    move "dataspell-*", "dataspell", source_glob: true
+    touch "dataspell/bin/dataspell64.vmoptions"
+    inreplace "dataspell/bin/dataspell64.vmoptions", /\z/, "-Dide.no.platform.update=true\n"
+    mkdir_p ".local/share/applications", base: :home
+    mkdir_p ".local/share/icons/hicolor/scalable/apps", base: :home
+    write_file "jetbrains-dataspell.desktop", <<~EOS
       [Desktop Entry]
       Version=1.0
       Name=DataSpell
       Comment=The IDE for data analysis
-      Exec=#{HOMEBREW_PREFIX}/bin/dataspell %u
+      Exec={{HOMEBREW_PREFIX}}/bin/dataspell %u
       Icon=dataspell
       Type=Application
       Categories=Development;IDE;
@@ -54,8 +58,12 @@ cask "dataspell-linux" do
     EOS
   end
 
-  postflight do
-    system "/usr/bin/xdg-icon-resource", "forceupdate"
+  postflight_steps do
+    mkdir_p "xdg-user-data"
+    symlink ".local/share", "xdg-user-data/share", source_base: :home
+    run "/usr/bin/xdg-icon-resource", args: ["forceupdate"], must_succeed: false,
+                                  env: { "XDG_DATA_HOME" => "{{staged_path}}/xdg-user-data/share" },
+                                  writable_paths: [".local/share/icons/hicolor"], writable_base: :home
   end
 
   zap trash: [
